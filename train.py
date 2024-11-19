@@ -8,14 +8,14 @@ from torch.utils.data import DataLoader, Dataset
 from utils.loss import Fusionloss
 import kornia
 from kornia.losses import SSIMLoss
-from net import Restormer_Encoder_Simplified, Restormer_Encoder, Restormer_Decoder, Restormer_Decoder_Simplified, BaseFeatureExtraction, ModifiedDetailFeatureExtraction
+from net import Restormer_Encoder_Simplified, Restormer_Decoder_Simplified, BaseFeatureExtraction, ModifiedDetailFeatureExtraction
 from utils.dataset import H5Dataset
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 # Ensure necessary directories exist
-os.makedirs('checkpoint/DIDF_Encoder', exist_ok=True)
-os.makedirs('checkpoint/DIDF_Decoder', exist_ok=True)
+os.makedirs('checkpoint/DIDF_Encoder_Simplified', exist_ok=True)
+os.makedirs('checkpoint/DIDF_Decoder_Simplified', exist_ok=True)
 os.makedirs('checkpoint/BaseFuseLayer', exist_ok=True)
 os.makedirs('checkpoint/DetailFuseLayer', exist_ok=True)
 
@@ -55,8 +55,8 @@ optim_gamma = 0.5
 
 # Model
 device = 'cpu'
-DIDF_Encoder = nn.DataParallel(Restormer_Encoder()).to(device)
-DIDF_Decoder = nn.DataParallel(Restormer_Decoder()).to(device)
+DIDF_Encoder = nn.DataParallel(Restormer_Encoder_Simplified()).to(device)
+DIDF_Decoder = nn.DataParallel(Restormer_Decoder_Simplified()).to(device)
 BaseFuseLayer = nn.DataParallel(BaseFeatureExtraction(dim=64, num_heads=8)).to(device)
 DetailFuseLayer = nn.DataParallel(ModifiedDetailFeatureExtraction(num_layers=2)).to(device)
 
@@ -113,10 +113,10 @@ for epoch in range(num_epochs):
         optimizer4.zero_grad()
 
         if epoch < epoch_gap:  # Phase I
-            feature_V_B, feature_V_D, _ = DIDF_Encoder(data_VIS)
-            feature_I_B, feature_I_D, _ = DIDF_Encoder(data_IR)
-            data_VIS_hat, _ = DIDF_Decoder(data_VIS, feature_V_B, feature_V_D)
-            data_IR_hat, _ = DIDF_Decoder(data_IR, feature_I_B, feature_I_D)
+            feature_V = DIDF_Encoder(data_VIS)
+            feature_I = DIDF_Encoder(data_IR)
+            data_VIS_hat = DIDF_Decoder(feature_V)
+            data_IR_hat = DIDF_Decoder(feature_I)
 
             mse_loss_V = 5 * Loss_ssim(data_VIS, data_VIS_hat) + MSELoss(data_VIS, data_VIS_hat)
             mse_loss_I = 5 * Loss_ssim(data_IR, data_IR_hat) + MSELoss(data_IR, data_IR_hat)
@@ -180,9 +180,9 @@ for epoch in range(num_epochs):
 
     # Save model checkpoints
     torch.save(DIDF_Encoder.state_dict(),
-               'checkpoint/DIDF_Encoder/encoder_epoch_%d_%d.pth' % (epoch, num_epochs))
+               'checkpoint/DIDF_Encoder_Simplified/encoder_epoch_%d_%d.pth' % (epoch, num_epochs))
     torch.save(DIDF_Decoder.state_dict(),
-               'checkpoint/DIDF_Decoder/decoder_epoch_%d_%d.pth' % (epoch, num_epochs))
+               'checkpoint/DIDF_Decoder_Simplified/decoder_epoch_%d_%d.pth' % (epoch, num_epochs))
     torch.save(BaseFuseLayer.state_dict(),
                'checkpoint/BaseFuseLayer/BaseFuse_epoch_%d_%d.pth' % (epoch, num_epochs))
     torch.save(DetailFuseLayer.state_dict(),
