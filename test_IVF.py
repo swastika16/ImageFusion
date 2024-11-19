@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from net import Restormer_Encoder, Restormer_Decoder, BaseFeatureExtraction, Restormer_Encoder_Simplified, Restormer_Decoder_Simplified
+from net import BaseFeatureExtraction, Restormer_Encoder_Simplified, Restormer_Decoder_Simplified
 from utils.Evaluator import Evaluator
 from utils.img_read_save import img_save, image_read_cv2
 
@@ -19,8 +19,8 @@ def remove_prefix(state_dict, prefix='module.'):
 device = 'cpu'
 
 # Initialize models
-Encoder = Restormer_Encoder().to(device)
-Decoder = Restormer_Decoder().to(device)
+Encoder = Restormer_Encoder_Simplified().to(device)
+Decoder = Restormer_Decoder_Simplified().to(device)
 BaseFuseLayer = BaseFeatureExtraction(dim=64, num_heads=8).to(device)
 
 # Modify DetailFuseLayer to match the trained model
@@ -43,8 +43,10 @@ ckpt_path = "checkpoint"  # Adjust this path to where your model was saved durin
 
 # Load the checkpoint and adjust for `nn.DataParallel`
 checkpoint = {
-    'DIDF_Encoder': torch.load(os.path.join(ckpt_path, "DIDF_Encoder/encoder_epoch_0_1.pth"), map_location=device),
-    'DIDF_Decoder': torch.load(os.path.join(ckpt_path, "DIDF_Decoder/decoder_epoch_0_1.pth"), map_location=device),
+    # 'DIDF_Encoder': torch.load(os.path.join(ckpt_path, "DIDF_Encoder/encoder_epoch_0_1.pth"), map_location=device),
+    # 'DIDF_Decoder': torch.load(os.path.join(ckpt_path, "DIDF_Decoder/decoder_epoch_0_1.pth"), map_location=device),
+    'DIDF_Encoder': torch.load(os.path.join(ckpt_path, "DIDF_Encoder_Simplified/encoder_epoch_0_1.pth"), map_location=device),
+    'DIDF_Decoder': torch.load(os.path.join(ckpt_path, "DIDF_Decoder_Simplified/decoder_epoch_0_1.pth"), map_location=device),
     'BaseFuseLayer': torch.load(os.path.join(ckpt_path, "BaseFuseLayer/BaseFuse_epoch_0_1.pth"), map_location=device),
     'DetailFuseLayer': torch.load(os.path.join(ckpt_path, "DetailFuseLayer/DetailFuse_epoch_0_1.pth"), map_location=device)
 }
@@ -88,11 +90,17 @@ for dataset_name in ["RoadScene", "TNO", "MRI_CT"]:
             data_VIS, data_IR = data_VIS.to(device), data_IR.to(device)
 
             # Forward pass through the network
-            feature_V_B, feature_V_D, feature_V = Encoder(data_VIS)
-            feature_I_B, feature_I_D, feature_I = Encoder(data_IR)
-            feature_F_B = BaseFuseLayer(feature_V_B + feature_I_B)
-            feature_F_D = DetailFuseLayer(feature_V_D + feature_I_D)
-            data_Fuse, _ = Decoder(data_VIS, feature_F_B, feature_F_D)
+            # when using the simplified encoder/ decoder
+            output = Encoder(data_VIS)
+            feature_I = Encoder(data_IR)
+            data_Fuse = Decoder(data_VIS)
+
+            # Uncomment when using the unsimplified Encoder/ Decoder
+            # feature_V_B, feature_V_D, feature_V = Encoder(data_VIS)
+            # feature_I_B, feature_I_D, feature_I = Encoder(data_IR)
+            # feature_F_B = BaseFuseLayer(feature_V_B + feature_I_B)
+            # feature_F_D = DetailFuseLayer(feature_V_D + feature_I_D)
+            # data_Fuse, _ = Decoder(data_VIS, feature_F_B, feature_F_D)
             data_Fuse = (data_Fuse - torch.min(data_Fuse)) / (torch.max(data_Fuse) - torch.min(data_Fuse))
             fi = np.squeeze((data_Fuse * 255).cpu().numpy())
 
